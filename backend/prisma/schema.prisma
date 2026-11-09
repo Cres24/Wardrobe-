@@ -14,6 +14,7 @@ model User {
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   clothes ClothingItem[]
   outfits Outfit[]
@@ -30,12 +31,18 @@ model ClothingItem {
   imagePublicId String?
   description   String?
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User @relation(
+    fields: [userId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   outfitItems OutfitItem[]
 
+  @@index([userId])
   @@index([userId, category])
 }
 
@@ -47,11 +54,13 @@ model Outfit {
   createdAt  DateTime @default(now())
 
   userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User @relation(
+    fields: [userId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   items OutfitItem[]
-
-  @@index([userId])
 }
 
 model OutfitItem {
@@ -59,9 +68,17 @@ model OutfitItem {
   outfitId       Int
   clothingItemId Int
 
-  outfit Outfit @relation(fields: [outfitId], references: [id], onDelete: Cascade)
+  outfit Outfit @relation(
+    fields: [outfitId],
+    references: [id],
+    onDelete: Cascade
+  )
 
-  clothingItem ClothingItem @relation(fields: [clothingItemId], references: [id], onDelete: Cascade)
+  clothingItem ClothingItem @relation(
+    fields: [clothingItemId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   @@unique([outfitId, clothingItemId])
 }
