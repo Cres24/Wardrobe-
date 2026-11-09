@@ -1,577 +1,361 @@
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Shirt,
   LayoutDashboard,
   ShoppingBag,
-  Sparkles,
-  Heart,
-  Settings,
-  Search,
+  LogOut,
   Plus,
-  CloudSun,
-  TrendingUp,
   Menu,
   X,
-  ChevronRight,
-  LogOut,
-  User,
-  CheckCircle,
-  AlertCircle,
-  Layers,
 } from "lucide-react";
+
+import { useAuth } from "./context/AuthContext";
+import UploadClothes from "./pages/UploadClothes";
+import Wardrobe from "./pages/Wardrobe";
 
 import api from "./services/api";
 
-// Sample wardrobe data for initial UI development
-const sampleClothes = [
-  {
-    id: 1,
-    name: "White T-Shirt",
-    category: "T-Shirts",
-    color: "White",
-    image:
-      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400",
-  },
-  {
-    id: 2,
-    name: "Black Jeans",
-    category: "Pants",
-    color: "Black",
-    image:
-      "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400",
-  },
-  {
-    id: 3,
-    name: "Blue Shirt",
-    category: "Shirts",
-    color: "Blue",
-    image:
-      "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=400",
-  },
-  {
-    id: 4,
-    name: "White Sneakers",
-    category: "Shoes",
-    color: "White",
-    image:
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400",
-  },
-];
-
-const sampleOutfits = [
-  {
-    id: 1,
-    name: "Casual Everyday",
-    description: "Perfect for a relaxed day out.",
-    occasion: "Casual",
-    items: [sampleClothes[0], sampleClothes[1], sampleClothes[3]],
-  },
-  {
-    id: 2,
-    name: "Smart Casual",
-    description: "A simple and stylish combination.",
-    occasion: "Dinner",
-    items: [sampleClothes[2], sampleClothes[1]],
-  },
-];
-
-const navigation = [
-  { name: "Dashboard", icon: LayoutDashboard },
-  { name: "My Wardrobe", icon: ShoppingBag },
-  { name: "Outfit Generator", icon: Sparkles },
-  { name: "Saved Outfits", icon: Heart },
-];
-
 function App() {
-  const [activePage, setActivePage] = useState("Dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [backendStatus, setBackendStatus] = useState("Checking");
+  const { user, login, register, logout } = useAuth();
 
-  useEffect(() => {
-    api
-      .get("/health")
-      .then(() => setBackendStatus("Connected"))
-      .catch(() => setBackendStatus("Disconnected"));
-  }, []);
+  const [page, setPage] = useState("Dashboard");
+  const [showRegister, setShowRegister] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
 
-  const clothes = sampleClothes.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
-  const navigate = (page) => {
-    setActivePage(page);
-    setSidebarOpen(false);
-    setSearch("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+
+    try {
+      setLoading(true);
+      setError("");
+
+      if (showRegister) {
+        await register(
+          form.name,
+          form.email,
+          form.password
+        );
+      } else {
+        await login(
+          form.email,
+          form.password
+        );
+      }
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+        "Authentication failed."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const Sidebar = () => (
-    <aside
-      className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col transform transition-transform duration-300 lg:translate-x-0 lg:static lg:flex ${
-        sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      }`}
-    >
-      <div className="flex items-center justify-between mb-12">
-        <div className="flex items-center gap-3">
-          <div className="bg-violet-600 p-2 rounded-xl">
-            <Shirt size={25} />
-          </div>
-          <span className="text-xl font-bold tracking-tight">
-            wardrobe<span className="text-violet-400">.</span>
-          </span>
-        </div>
-
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="lg:hidden text-slate-400"
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-5">
+        <form
+          onSubmit={handleAuth}
+          className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8"
         >
-          <X />
-        </button>
-      </div>
-
-      <p className="text-xs text-slate-500 uppercase tracking-widest mb-4">
-        Workspace
-      </p>
-
-      <nav className="space-y-2">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const active = activePage === item.name;
-
-          return (
-            <button
-              key={item.name}
-              onClick={() => navigate(item.name)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition ${
-                active
-                  ? "bg-violet-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              <Icon size={19} />
-              {item.name}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="mt-auto">
-        <div className="bg-slate-800 rounded-2xl p-4 mb-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles size={17} className="text-violet-400" />
-            <span className="text-sm font-semibold">Smart Styling</span>
+          <div className="bg-violet-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-6">
+            <Shirt size={30} />
           </div>
 
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Your personal wardrobe assistant is getting ready.
+          <h1 className="text-3xl font-bold">
+            Wardrobe
+          </h1>
+
+          <p className="text-slate-400 mt-2 mb-8">
+            {showRegister
+              ? "Create your personal wardrobe."
+              : "Welcome back to your wardrobe."}
           </p>
-        </div>
 
-        <button
-          onClick={() => navigate("Settings")}
-          className="flex items-center gap-3 text-slate-400 hover:text-white px-4 py-3 w-full text-sm"
-        >
-          <Settings size={19} />
-          Settings
-        </button>
-
-        <div className="border-t border-slate-800 mt-4 pt-5 flex items-center gap-3">
-          <div className="bg-violet-600 rounded-full w-10 h-10 flex items-center justify-center font-semibold">
-            U
-          </div>
-          <div>
-            <p className="text-sm font-medium">My Account</p>
-            <p className="text-xs text-slate-500">Wardrobe Member</p>
-          </div>
-        </div>
-      </div>
-    </aside>
-  );
-
-  const Header = () => (
-    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="lg:hidden text-slate-300"
-        >
-          <Menu size={24} />
-        </button>
-
-        <div>
-          <p className="text-slate-400 text-sm">Your personal space</p>
-          <h1 className="text-2xl font-bold">{activePage}</h1>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <Search
-            size={17}
-            className="absolute left-3 top-3 text-slate-500"
-          />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search clothes..."
-            className="bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-violet-500 w-full sm:w-56"
-          />
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5">
-          <User size={19} className="text-slate-300" />
-        </div>
-      </div>
-    </header>
-  );
-
-  const StatCard = ({ title, value, icon: Icon, color }) => (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-slate-400">{title}</p>
-        <div className={`p-2 rounded-xl ${color}`}>
-          <Icon size={20} />
-        </div>
-      </div>
-      <h2 className="text-3xl font-bold">{value}</h2>
-    </div>
-  );
-
-  const ClothingCard = ({ item }) => (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden group">
-      <div className="h-48 bg-slate-800 overflow-hidden">
-        <img
-          src={item.image}
-          alt={item.name}
-          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-        />
-      </div>
-
-      <div className="p-4">
-        <h3 className="font-semibold text-sm">{item.name}</h3>
-        <div className="flex justify-between mt-2 text-xs text-slate-400">
-          <span>{item.category}</span>
-          <span>{item.color}</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  const OutfitCard = ({ outfit }) => (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="font-semibold">{outfit.name}</h3>
-          <p className="text-xs text-slate-400 mt-1">
-            {outfit.description}
-          </p>
-        </div>
-        <span className="text-xs bg-violet-500/10 text-violet-300 px-3 py-1 rounded-full">
-          {outfit.occasion}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        {outfit.items.map((item) => (
-          <div key={item.id} className="h-28 rounded-xl overflow-hidden bg-slate-800">
-            <img
-              src={item.image}
-              alt={item.name}
-              className="w-full h-full object-cover"
+          {showRegister && (
+            <input
+              type="text"
+              placeholder="Full name"
+              value={form.name}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  name: e.target.value,
+                })
+              }
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 mb-4 outline-none focus:border-violet-500"
+              required
             />
-          </div>
-        ))}
-      </div>
+          )}
 
-      <button className="mt-4 text-sm text-violet-400 flex items-center gap-2 hover:text-violet-300">
-        View outfit <ChevronRight size={16} />
-      </button>
-    </div>
-  );
+          <input
+            type="email"
+            placeholder="Email address"
+            value={form.email}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                email: e.target.value,
+              })
+            }
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 mb-4 outline-none focus:border-violet-500"
+            required
+          />
 
-  const Dashboard = () => (
-    <>
-      <div className="bg-gradient-to-r from-violet-700 to-indigo-700 rounded-3xl p-7 md:p-10 mb-8">
-        <div className="max-w-xl">
-          <p className="text-violet-200 text-sm mb-3">
-            YOUR STYLE, ORGANIZED
-          </p>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            A better way to get dressed.
-          </h2>
-          <p className="text-violet-100 text-sm leading-relaxed mb-6">
-            Keep your wardrobe organized, discover new combinations
-            and make the most of the clothes you already own.
-          </p>
+          <input
+            type="password"
+            placeholder="Password (minimum 8 characters)"
+            value={form.password}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                password: e.target.value,
+              })
+            }
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 mb-5 outline-none focus:border-violet-500"
+            required
+            minLength={8}
+          />
+
+          {error && (
+            <p className="text-red-400 text-sm mb-4">
+              {error}
+            </p>
+          )}
 
           <button
-            onClick={() => navigate("My Wardrobe")}
-            className="bg-white text-violet-800 px-5 py-3 rounded-xl text-sm font-semibold hover:bg-violet-100 transition"
+            disabled={loading}
+            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-xl p-4 font-semibold"
           >
-            Explore my wardrobe
+            {loading
+              ? "Please wait..."
+              : showRegister
+              ? "Create Account"
+              : "Login"}
           </button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          title="Total Clothes"
-          value="04"
-          icon={Shirt}
-          color="bg-violet-500/10 text-violet-400"
-        />
-        <StatCard
-          title="Categories"
-          value="04"
-          icon={Layers}
-          color="bg-blue-500/10 text-blue-400"
-        />
-        <StatCard
-          title="Saved Outfits"
-          value="02"
-          icon={Heart}
-          color="bg-pink-500/10 text-pink-400"
-        />
-        <StatCard
-          title="Style Score"
-          value="85%"
-          icon={TrendingUp}
-          color="bg-green-500/10 text-green-400"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-        <div className="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="font-semibold text-lg">Recently Added</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Your latest wardrobe additions
-              </p>
-            </div>
+          <p className="text-center text-sm text-slate-400 mt-6">
+            {showRegister
+              ? "Already have an account?"
+              : "Don't have an account?"}
 
             <button
-              onClick={() => navigate("My Wardrobe")}
-              className="text-violet-400 text-sm"
+              type="button"
+              onClick={() => {
+                setShowRegister(!showRegister);
+                setError("");
+              }}
+              className="text-violet-400 ml-2"
             >
-              View all
+              {showRegister ? "Login" : "Register"}
             </button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {sampleClothes.map((item) => (
-              <ClothingCard key={item.id} item={item} />
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <CloudSun className="text-violet-400" size={24} />
-            <h2 className="font-semibold">Style Tips</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-medium mb-2">
-                Start with neutral colors
-              </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                White, black, beige and grey are versatile colors
-                that work well with many outfits.
-              </p>
-            </div>
-
-            <div className="border-t border-slate-800 pt-4">
-              <p className="text-sm font-medium mb-2">
-                Make use of what you own
-              </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Try creating different combinations from your
-                existing wardrobe before buying new clothes.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <section>
-        <div className="flex justify-between items-center mb-5">
-          <div>
-            <h2 className="text-lg font-semibold">Outfit Inspiration</h2>
-            <p className="text-sm text-slate-400 mt-1">
-              Combinations from your wardrobe
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate("Outfit Generator")}
-            className="text-violet-400 text-sm flex items-center gap-1"
-          >
-            Generate more <ChevronRight size={16} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {sampleOutfits.map((outfit) => (
-            <OutfitCard key={outfit.id} outfit={outfit} />
-          ))}
-        </div>
-      </section>
-    </>
-  );
-
-  const Wardrobe = () => (
-    <>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold">Your Clothing Collection</h2>
-          <p className="text-sm text-slate-400">
-            Manage everything in your digital wardrobe.
           </p>
-        </div>
-
-        <button
-          onClick={() => navigate("Upload Clothes")}
-          className="bg-violet-600 hover:bg-violet-500 px-4 py-3 rounded-xl text-sm flex items-center gap-2"
-        >
-          <Plus size={18} /> Add Clothes
-        </button>
+        </form>
       </div>
+    );
+  }
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-        {clothes.map((item) => (
-          <ClothingCard key={item.id} item={item} />
-        ))}
-      </div>
+  const navigation = [
+    {
+      name: "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "My Wardrobe",
+      icon: ShoppingBag,
+    },
+    {
+      name: "Upload Clothes",
+      icon: Plus,
+    },
+  ];
 
-      {clothes.length === 0 && (
-        <p className="text-slate-400 text-center py-12">
-          No matching clothes found.
-        </p>
-      )}
-    </>
-  );
-
-  const OutfitGenerator = () => (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-indigo-700 to-violet-700 p-8 rounded-2xl">
-        <Sparkles size={30} className="mb-4" />
-        <h2 className="text-2xl font-bold mb-2">
-          Your personal outfit generator
-        </h2>
-        <p className="text-sm text-violet-100">
-          Discover combinations using clothes already in your wardrobe.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        {["Casual", "Formal", "Party", "Everyday"].map((occasion) => (
-          <button
-            key={occasion}
-            className="bg-slate-800 border border-slate-700 hover:border-violet-500 rounded-xl px-5 py-3 text-sm"
-          >
-            {occasion}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {sampleOutfits.map((outfit) => (
-          <OutfitCard key={outfit.id} outfit={outfit} />
-        ))}
-      </div>
-
-      <button className="bg-violet-600 hover:bg-violet-500 rounded-xl px-6 py-3 text-sm font-semibold">
-        <Sparkles size={17} className="inline mr-2" />
-        Generate New Outfits
-      </button>
-    </div>
-  );
-
-  const SavedOutfits = () => (
-    <div>
-      <h2 className="text-lg font-semibold mb-2">Your Favorite Looks</h2>
-      <p className="text-sm text-slate-400 mb-6">
-        Your saved outfit combinations.
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {sampleOutfits.map((outfit) => (
-          <OutfitCard key={outfit.id} outfit={outfit} />
-        ))}
-      </div>
-    </div>
-  );
-
-  const UploadClothes = () => (
-    <div className="max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-8">
-      <h2 className="text-xl font-semibold mb-2">Upload Clothing</h2>
-      <p className="text-sm text-slate-400 mb-6">
-        This upload interface will be connected to Cloudinary and
-        the clothing database in our next development stage.
-      </p>
-
-      <div className="border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center">
-        <Plus size={35} className="mx-auto text-violet-400 mb-4" />
-        <p className="font-medium">Your upload feature is coming next</p>
-        <p className="text-xs text-slate-500 mt-2">
-          JPG, JPEG and PNG images will be supported.
-        </p>
-      </div>
-    </div>
-  );
-
-  const SettingsPage = () => (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-      <h2 className="font-semibold text-lg mb-4">Application Settings</h2>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm">Backend connection</p>
-          <p className="text-xs text-slate-400 mt-1">
-            Express API availability
-          </p>
-        </div>
-        <span className="text-sm text-green-400">{backendStatus}</span>
-      </div>
-    </div>
-  );
-
-  const pageComponents = {
-    Dashboard: <Dashboard />,
-    "My Wardrobe": <Wardrobe />,
-    "Outfit Generator": <OutfitGenerator />,
-    "Saved Outfits": <SavedOutfits />,
-    "Upload Clothes": <UploadClothes />,
-    Settings: <SettingsPage />,
+  const handleLogout = () => {
+    logout();
+    setPage("Dashboard");
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex">
-      {sidebarOpen && (
+      {mobileMenu && (
         <div
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => setMobileMenu(false)}
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
         />
       )}
 
-      <Sidebar />
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col transform transition-transform lg:translate-x-0 ${
+          mobileMenu ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex justify-between items-center mb-12">
+          <div className="flex gap-3 items-center">
+            <div className="bg-violet-600 p-2 rounded-xl">
+              <Shirt size={24} />
+            </div>
 
-      <main className="flex-1 min-w-0 p-5 md:p-8 lg:p-10">
-        <Header />
+            <span className="text-xl font-bold">
+              wardrobe.
+            </span>
+          </div>
 
-        <div className="mb-6 flex items-center gap-2 text-xs text-slate-500">
-          <span>Wardrobe</span>
-          <ChevronRight size={13} />
-          <span className="text-violet-400">{activePage}</span>
+          <button
+            onClick={() => setMobileMenu(false)}
+            className="lg:hidden"
+          >
+            <X />
+          </button>
         </div>
 
-        {pageComponents[activePage] || <Dashboard />}
+        <p className="text-xs text-slate-500 uppercase mb-4">
+          Menu
+        </p>
 
-        <footer className="mt-12 pt-6 border-t border-slate-800 text-center text-xs text-slate-500">
-          Smart Wardrobe © 2026. Organize your style.
-        </footer>
+        <nav className="space-y-2">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+
+            return (
+              <button
+                key={item.name}
+                onClick={() => {
+                  setPage(item.name);
+                  setMobileMenu(false);
+                }}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm ${
+                  page === item.name
+                    ? "bg-violet-600"
+                    : "text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                <Icon size={19} />
+                {item.name}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto border-t border-slate-800 pt-5">
+          <p className="text-sm font-semibold">
+            {user.name}
+          </p>
+
+          <p className="text-xs text-slate-500 mt-1 mb-4">
+            {user.email}
+          </p>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 text-red-400 text-sm p-3 hover:bg-slate-800 rounded-xl w-full"
+          >
+            <LogOut size={18} />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 min-w-0 p-5 md:p-8">
+        <header className="flex items-center justify-between mb-10">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileMenu(true)}
+              className="lg:hidden"
+            >
+              <Menu size={25} />
+            </button>
+
+            <div>
+              <p className="text-xs text-slate-500">
+                Your personal space
+              </p>
+
+              <h1 className="text-2xl font-bold">
+                {page}
+              </h1>
+            </div>
+          </div>
+        </header>
+
+        {page === "Dashboard" && (
+          <div>
+            <div className="bg-gradient-to-r from-violet-700 to-indigo-700 rounded-3xl p-8 md:p-12 mb-8">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Welcome, {user.name}!
+              </h2>
+
+              <p className="text-violet-100 mb-7">
+                Organize your clothes and discover new outfits.
+              </p>
+
+              <button
+                onClick={() => setPage("Upload Clothes")}
+                className="bg-white text-violet-700 px-6 py-3 rounded-xl font-semibold"
+              >
+                <Plus size={18} className="inline mr-2" />
+                Upload Clothing
+              </button>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-5">
+              <button
+                onClick={() => setPage("My Wardrobe")}
+                className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-left hover:border-violet-500"
+              >
+                <ShoppingBag
+                  size={30}
+                  className="text-violet-400 mb-4"
+                />
+
+                <h3 className="font-semibold text-lg">
+                  My Wardrobe
+                </h3>
+
+                <p className="text-sm text-slate-400 mt-2">
+                  View all your uploaded clothes.
+                </p>
+              </button>
+
+              <button
+                onClick={() => setPage("Upload Clothes")}
+                className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-left hover:border-violet-500"
+              >
+                <Plus
+                  size={30}
+                  className="text-violet-400 mb-4"
+                />
+
+                <h3 className="font-semibold text-lg">
+                  Add Clothing
+                </h3>
+
+                <p className="text-sm text-slate-400 mt-2">
+                  Add a new item to your collection.
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {page === "Upload Clothes" && (
+          <UploadClothes
+            onUploaded={() => setPage("My Wardrobe")}
+          />
+        )}
+
+        {page === "My Wardrobe" && (
+          <Wardrobe />
+        )}
       </main>
     </div>
   );
