@@ -1,362 +1,532 @@
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
-  Shirt,
-  LayoutDashboard,
-  ShoppingBag,
-  LogOut,
-  Plus,
   Menu,
   X,
+  LayoutDashboard,
+  Shirt,
+  Upload,
+  LogOut,
+  User,
+  Sparkles,
+  Heart,
+  Search,
+  ArrowRight,
+  Lock,
+  Mail,
+  UserRound,
 } from "lucide-react";
 
 import { useAuth } from "./context/AuthContext";
 import UploadClothes from "./pages/UploadClothes";
 import Wardrobe from "./pages/Wardrobe";
 
-import api from "./services/api";
-
 function App() {
   const { user, login, register, logout } = useAuth();
 
-  const [page, setPage] = useState("Dashboard");
-  const [showRegister, setShowRegister] = useState(false);
+  const [page, setPage] = useState("dashboard");
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const [form, setForm] = useState({
     name: "",
     email: "",
+    username: "",
     password: "",
+    confirmPassword: "",
   });
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const handleInput = (e) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
+  };
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
     try {
-      setLoading(true);
-      setError("");
+      if (authMode === "register") {
+        if (form.password !== form.confirmPassword) {
+          throw new Error("Passwords do not match.");
+        }
 
-      if (showRegister) {
-        await register(
-          form.name,
-          form.email,
-          form.password
-        );
+        await register({
+          name: form.name,
+          email: form.email,
+          username: form.username,
+          password: form.password,
+        });
       } else {
-        await login(
-          form.email,
-          form.password
-        );
+        await login({
+          email: form.email,
+          password: form.password,
+        });
       }
+
+      setPage("dashboard");
     } catch (err) {
       setError(
         err.response?.data?.message ||
-        "Authentication failed."
+        err.message ||
+        "Authentication failed. Please try again."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-5">
-        <form
-          onSubmit={handleAuth}
-          className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8"
-        >
-          <div className="bg-violet-600 w-14 h-14 rounded-2xl flex items-center justify-center mb-6">
-            <Shirt size={30} />
-          </div>
-
-          <h1 className="text-3xl font-bold">
-            Wardrobe
-          </h1>
-
-          <p className="text-slate-400 mt-2 mb-8">
-            {showRegister
-              ? "Create your personal wardrobe."
-              : "Welcome back to your wardrobe."}
-          </p>
-
-          {showRegister && (
-            <input
-              type="text"
-              placeholder="Full name"
-              value={form.name}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  name: e.target.value,
-                })
-              }
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 mb-4 outline-none focus:border-violet-500"
-              required
-            />
-          )}
-
-          <input
-            type="email"
-            placeholder="Email address"
-            value={form.email}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                email: e.target.value,
-              })
-            }
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 mb-4 outline-none focus:border-violet-500"
-            required
-          />
-
-          <input
-            type="password"
-            placeholder="Password (minimum 8 characters)"
-            value={form.password}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                password: e.target.value,
-              })
-            }
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 mb-5 outline-none focus:border-violet-500"
-            required
-            minLength={8}
-          />
-
-          {error && (
-            <p className="text-red-400 text-sm mb-4">
-              {error}
-            </p>
-          )}
-
-          <button
-            disabled={loading}
-            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-xl p-4 font-semibold"
-          >
-            {loading
-              ? "Please wait..."
-              : showRegister
-              ? "Create Account"
-              : "Login"}
-          </button>
-
-          <p className="text-center text-sm text-slate-400 mt-6">
-            {showRegister
-              ? "Already have an account?"
-              : "Don't have an account?"}
-
-            <button
-              type="button"
-              onClick={() => {
-                setShowRegister(!showRegister);
-                setError("");
-              }}
-              className="text-violet-400 ml-2"
-            >
-              {showRegister ? "Login" : "Register"}
-            </button>
-          </p>
-        </form>
-      </div>
-    );
-  }
+  const navigate = (destination) => {
+    setPage(destination);
+    setMobileMenu(false);
+  };
 
   const navigation = [
     {
       name: "Dashboard",
       icon: LayoutDashboard,
+      page: "dashboard",
     },
     {
       name: "My Wardrobe",
-      icon: ShoppingBag,
+      icon: Shirt,
+      page: "wardrobe",
     },
     {
       name: "Upload Clothes",
-      icon: Plus,
+      icon: Upload,
+      page: "upload",
     },
   ];
 
-  const handleLogout = () => {
-    logout();
-    setPage("Dashboard");
-  };
+  if (!user) {
+    return (
+      <div className="auth-background min-h-screen flex items-center justify-center px-4 py-10">
+        <div className="auth-card w-full max-w-md rounded-3xl p-6 sm:p-9">
+          <div className="text-center mb-8">
+            <div className="logo-icon mx-auto mb-4">
+              <Shirt size={30} />
+            </div>
+
+            <h1 className="text-3xl font-bold text-white">
+              Smart Wardrobe
+            </h1>
+
+            <p className="text-gray-400 mt-2">
+              Your personal fashion assistant
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 bg-gray-900 rounded-xl p-1 mb-7">
+            <button
+              onClick={() => {
+                setAuthMode("login");
+                setError("");
+              }}
+              className={`py-3 rounded-lg transition ${
+                authMode === "login"
+                  ? "bg-purple-600 text-white"
+                  : "text-gray-400"
+              }`}
+            >
+              Login
+            </button>
+
+            <button
+              onClick={() => {
+                setAuthMode("register");
+                setError("");
+              }}
+              className={`py-3 rounded-lg transition ${
+                authMode === "register"
+                  ? "bg-purple-600 text-white"
+                  : "text-gray-400"
+              }`}
+            >
+              Register
+            </button>
+          </div>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            {authMode === "register" && (
+              <>
+                <div>
+                  <label className="form-label">Full Name</label>
+                  <div className="input-wrapper">
+                    <UserRound size={18} />
+                    <input
+                      name="name"
+                      value={form.name}
+                      onChange={handleInput}
+                      placeholder="Enter your full name"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label">Username</label>
+                  <div className="input-wrapper">
+                    <User size={18} />
+                    <input
+                      name="username"
+                      value={form.username}
+                      onChange={handleInput}
+                      placeholder="Choose a username"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="form-label">Email Address</label>
+              <div className="input-wrapper">
+                <Mail size={18} />
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleInput}
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="form-label">Password</label>
+              <div className="input-wrapper">
+                <Lock size={18} />
+                <input
+                  type="password"
+                  name="password"
+                  value={form.password}
+                  onChange={handleInput}
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
+            </div>
+
+            {authMode === "register" && (
+              <div>
+                <label className="form-label">
+                  Confirm Password
+                </label>
+                <div className="input-wrapper">
+                  <Lock size={18} />
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    value={form.confirmPassword}
+                    onChange={handleInput}
+                    placeholder="Confirm your password"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <p className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="primary-button w-full"
+            >
+              {loading
+                ? "Please wait..."
+                : authMode === "login"
+                ? "Login to your account"
+                : "Create Account"}
+            </button>
+          </form>
+
+          <p className="text-center text-gray-500 text-sm mt-6">
+            Organize your style. Simplify your life.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex">
+    <div className="app-layout min-h-screen text-white">
+      {/* Mobile Header */}
+      <header className="mobile-header lg:hidden">
+        <div className="flex items-center gap-3">
+          <div className="logo-small">
+            <Shirt size={21} />
+          </div>
+          <span className="font-bold text-lg">Smart Wardrobe</span>
+        </div>
+
+        <button
+          onClick={() => setMobileMenu(!mobileMenu)}
+          className="icon-button"
+          aria-label="Toggle navigation"
+        >
+          {mobileMenu ? <X /> : <Menu />}
+        </button>
+      </header>
+
+      {/* Mobile overlay */}
       {mobileMenu && (
         <div
+          className="mobile-overlay lg:hidden"
           onClick={() => setMobileMenu(false)}
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
         />
       )}
 
+      {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col transform transition-transform lg:translate-x-0 ${
-          mobileMenu ? "translate-x-0" : "-translate-x-full"
+        className={`sidebar ${
+          mobileMenu ? "sidebar-open" : ""
         }`}
       >
-        <div className="flex justify-between items-center mb-12">
-          <div className="flex gap-3 items-center">
-            <div className="bg-violet-600 p-2 rounded-xl">
-              <Shirt size={24} />
-            </div>
+        <div className="sidebar-brand">
+          <div className="logo-small">
+            <Shirt size={23} />
+          </div>
 
-            <span className="text-xl font-bold">
-              wardrobe.
-            </span>
+          <div>
+            <h2 className="font-bold text-lg">Smart Wardrobe</h2>
+            <p className="text-xs text-gray-500">
+              Your personal stylist
+            </p>
           </div>
 
           <button
             onClick={() => setMobileMenu(false)}
-            className="lg:hidden"
+            className="ml-auto lg:hidden"
+            aria-label="Close navigation"
           >
             <X />
           </button>
         </div>
 
-        <p className="text-xs text-slate-500 uppercase mb-4">
-          Menu
-        </p>
+        <div className="mt-9">
+          <p className="sidebar-heading">MENU</p>
 
-        <nav className="space-y-2">
-          {navigation.map((item) => {
-            const Icon = item.icon;
+          <nav className="space-y-2 mt-3">
+            {navigation.map((item) => {
+              const Icon = item.icon;
 
-            return (
-              <button
-                key={item.name}
-                onClick={() => {
-                  setPage(item.name);
-                  setMobileMenu(false);
-                }}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-sm ${
-                  page === item.name
-                    ? "bg-violet-600"
-                    : "text-slate-400 hover:bg-slate-800"
-                }`}
-              >
-                <Icon size={19} />
-                {item.name}
-              </button>
-            );
-          })}
-        </nav>
+              return (
+                <button
+                  key={item.page}
+                  onClick={() => navigate(item.page)}
+                  className={`nav-item ${
+                    page === item.page ? "nav-active" : ""
+                  }`}
+                >
+                  <Icon size={20} />
+                  <span>{item.name}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
-        <div className="mt-auto border-t border-slate-800 pt-5">
-          <p className="text-sm font-semibold">
-            {user.name}
-          </p>
+        <div className="mt-auto pt-8">
+          <div className="profile-card">
+            <div className="profile-avatar">
+              {(user.name || user.username || "U")
+                .charAt(0)
+                .toUpperCase()}
+            </div>
 
-          <p className="text-xs text-slate-500 mt-1 mb-4">
-            {user.email}
-          </p>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold truncate">
+                {user.name || user.username}
+              </p>
+              <p className="text-xs text-gray-500 truncate">
+                {user.email}
+              </p>
+            </div>
+          </div>
 
           <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 text-red-400 text-sm p-3 hover:bg-slate-800 rounded-xl w-full"
+            onClick={logout}
+            className="nav-item logout-button mt-3"
           >
-            <LogOut size={18} />
-            Logout
+            <LogOut size={19} />
+            <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 p-5 md:p-8">
-        <header className="flex items-center justify-between mb-10">
+      {/* Main Content */}
+      <main className="main-content">
+        <header className="desktop-header hidden lg:flex">
+          <div>
+            <h1 className="text-xl font-semibold">
+              {page === "dashboard"
+                ? "Dashboard"
+                : page === "wardrobe"
+                ? "My Wardrobe"
+                : "Upload Clothes"}
+            </h1>
+
+            <p className="text-sm text-gray-500 mt-1">
+              Welcome back, {user.name || user.username}!
+            </p>
+          </div>
+
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMobileMenu(true)}
-              className="lg:hidden"
-            >
-              <Menu size={25} />
-            </button>
-
-            <div>
-              <p className="text-xs text-slate-500">
-                Your personal space
-              </p>
-
-              <h1 className="text-2xl font-bold">
-                {page}
-              </h1>
+            <div className="profile-avatar">
+              {(user.name || user.username || "U")
+                .charAt(0)
+                .toUpperCase()}
             </div>
           </div>
         </header>
 
-        {page === "Dashboard" && (
-          <div>
-            <div className="bg-gradient-to-r from-violet-700 to-indigo-700 rounded-3xl p-8 md:p-12 mb-8">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Welcome, {user.name}!
-              </h2>
+        <div className="page-container">
+          {page === "dashboard" && (
+            <Dashboard
+              user={user}
+              navigate={navigate}
+            />
+          )}
 
-              <p className="text-violet-100 mb-7">
-                Organize your clothes and discover new outfits.
-              </p>
+          {page === "upload" && (
+            <UploadClothes
+              onUploaded={() => navigate("wardrobe")}
+            />
+          )}
 
-              <button
-                onClick={() => setPage("Upload Clothes")}
-                className="bg-white text-violet-700 px-6 py-3 rounded-xl font-semibold"
-              >
-                <Plus size={18} className="inline mr-2" />
-                Upload Clothing
-              </button>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-5">
-              <button
-                onClick={() => setPage("My Wardrobe")}
-                className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-left hover:border-violet-500"
-              >
-                <ShoppingBag
-                  size={30}
-                  className="text-violet-400 mb-4"
-                />
-
-                <h3 className="font-semibold text-lg">
-                  My Wardrobe
-                </h3>
-
-                <p className="text-sm text-slate-400 mt-2">
-                  View all your uploaded clothes.
-                </p>
-              </button>
-
-              <button
-                onClick={() => setPage("Upload Clothes")}
-                className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-left hover:border-violet-500"
-              >
-                <Plus
-                  size={30}
-                  className="text-violet-400 mb-4"
-                />
-
-                <h3 className="font-semibold text-lg">
-                  Add Clothing
-                </h3>
-
-                <p className="text-sm text-slate-400 mt-2">
-                  Add a new item to your collection.
-                </p>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {page === "Upload Clothes" && (
-          <UploadClothes
-            onUploaded={() => setPage("My Wardrobe")}
-          />
-        )}
-
-        {page === "My Wardrobe" && (
-          <Wardrobe />
-        )}
+          {page === "wardrobe" && (
+            <Wardrobe />
+          )}
+        </div>
       </main>
+    </div>
+  );
+}
+
+function Dashboard({ user, navigate }) {
+  return (
+    <div className="space-y-7">
+      <section className="hero-section">
+        <div className="relative z-10 max-w-2xl">
+          <div className="inline-flex items-center gap-2 bg-white/10 rounded-full px-3 py-2 text-sm mb-5">
+            <Sparkles size={16} />
+            Your style, organized
+          </div>
+
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight">
+            Dress better.
+            <br />
+            Feel confident.
+            <br />
+            Every day.
+          </h2>
+
+          <p className="text-gray-300 mt-4 max-w-md text-sm sm:text-base">
+            Welcome, {user.name || user.username}.
+            Keep your clothes organized and discover
+            new ways to style your wardrobe.
+          </p>
+
+          <button
+            onClick={() => navigate("upload")}
+            className="hero-button mt-7"
+          >
+            Add New Clothes
+            <ArrowRight size={18} />
+          </button>
+        </div>
+
+        <div className="hero-decoration">
+          <Shirt size={150} strokeWidth={0.8} />
+        </div>
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="section-title">Quick Actions</h2>
+            <p className="section-subtitle">
+              Manage your wardrobe
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <button
+            onClick={() => navigate("upload")}
+            className="action-card text-left"
+          >
+            <div className="action-icon purple">
+              <Upload size={24} />
+            </div>
+
+            <h3 className="font-semibold text-lg mt-4">
+              Upload Clothes
+            </h3>
+
+            <p className="text-gray-400 text-sm mt-2">
+              Add new clothing items to your collection.
+            </p>
+
+            <div className="text-purple-400 mt-4 flex items-center gap-2 text-sm">
+              Upload now <ArrowRight size={16} />
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate("wardrobe")}
+            className="action-card text-left"
+          >
+            <div className="action-icon pink">
+              <Heart size={24} />
+            </div>
+
+            <h3 className="font-semibold text-lg mt-4">
+              My Wardrobe
+            </h3>
+
+            <p className="text-gray-400 text-sm mt-2">
+              View and organize all your clothing items.
+            </p>
+
+            <div className="text-pink-400 mt-4 flex items-center gap-2 text-sm">
+              View wardrobe <ArrowRight size={16} />
+            </div>
+          </button>
+        </div>
+      </section>
+
+      <section className="tip-card">
+        <div className="flex items-start gap-4">
+          <div className="action-icon purple shrink-0">
+            <Sparkles size={23} />
+          </div>
+
+          <div>
+            <h3 className="font-semibold">
+              Style Tip
+            </h3>
+            <p className="text-gray-400 text-sm mt-2 leading-relaxed">
+              Organize your clothes by category, color
+              and occasion to make choosing your daily
+              outfit easier.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
