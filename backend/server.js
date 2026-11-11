@@ -5,84 +5,120 @@ const express = require("express");
 const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
 
+// Import route files
 const authRoutes = require("./routes/authRoutes");
 const clothingRoutes = require("./routes/clothingRoutes");
 
 const app = express();
 const prisma = new PrismaClient();
 
-app.use(cors({
-  origin: "http://localhost:5173",
-}));
+// ===============================
+// MIDDLEWARE
+// ===============================
+
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true,
+  })
+);
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ===============================
+// HEALTH CHECK
+// ===============================
 
 app.get("/", (req, res) => {
-  res.json({
-    message: "Smart Wardrobe API is running",
+  res.status(200).json({
+    success: true,
+    message: "Smart Wardrobe API is running!",
   });
 });
 
-// Check database connection
-app.get("/api/health", async (req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-
-    res.json({
-      status: "OK",
-      database: "Connected",
-    });
-  } catch (error) {
-    console.error("Database health check failed:", error);
-
-    res.status(503).json({
-      status: "ERROR",
-      database: "Disconnected",
-    });
-  }
+// API health check
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API is working correctly",
+  });
 });
 
-// API routes
+// ===============================
+// API ROUTES
+// ===============================
+
+// Authentication routes
 app.use("/api/auth", authRoutes);
+
+// Clothing routes
 app.use("/api/clothes", clothingRoutes);
 
-// Handle upload errors
-app.use((error, req, res, next) => {
-  console.error("API error:", error);
+// ===============================
+// 404 - ROUTE NOT FOUND
+// ===============================
 
-  if (error instanceof require("multer").MulterError) {
-    return res.status(400).json({
-      message:
-        error.code === "LIMIT_FILE_SIZE"
-          ? "Image must be smaller than 5 MB."
-          : error.message,
-    });
-  }
-
-  if (
-    error.message ===
-    "Only JPG, JPEG and PNG images are allowed."
-  ) {
-    return res.status(400).json({
-      message: error.message,
-    });
-  }
-
-  res.status(500).json({
-    message: "Internal server error.",
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API route not found",
+    requestedUrl: req.originalUrl,
+    method: req.method,
   });
 });
+
+// ===============================
+// GLOBAL ERROR HANDLER
+// ===============================
+
+app.use((err, req, res, next) => {
+  console.error("Server Error:", err);
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error",
+  });
+});
+
+// ===============================
+// START SERVER
+// ===============================
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
-  console.log(`Smart Wardrobe API running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await prisma.$connect();
 
-async function shutdown() {
-  await prisma.$disconnect();
-  server.close();
+    console.log("PostgreSQL connected successfully!");
+
+    const server = app.listen(PORT, () => {
+      console.log(`Smart Wardrobe server running on port ${PORT}`);
+      console.log(`Local URL: http://localhost:${PORT}`);
+      console.log(`Health URL: http://localhost:${PORT}/api/health`);
+    });
+
+    // Graceful shutdown
+    async function shutdown() {
+      console.log("Shutting down server...");
+
+      server.close(async () => {
+        await prisma.$disconnect();
+        console.log("Database disconnected.");
+        process.exit(0);
+      });
+    }
+
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+
+  } catch (error) {
+    console.error("Unable to start server:", error);
+
+    await prisma.$disconnect();
+    process.exit(1);
+  }
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+startServer();

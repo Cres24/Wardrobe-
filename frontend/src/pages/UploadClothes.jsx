@@ -1,56 +1,35 @@
 
-import { useEffect, useState } from "react";
-import { ImagePlus, Upload, X, CheckCircle } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Upload, ImagePlus, Loader2, CheckCircle } from "lucide-react";
 import api from "../services/api";
 
-const initialForm = {
-  name: "",
-  category: "",
-  color: "",
-  season: "",
-  occasion: "",
-  description: "",
-};
+export default function UploadClothes({ onUploaded }) {
+  const [form, setForm] = useState({
+    name: "",
+    category: "",
+    color: "",
+    season: "",
+    occasion: "",
+    description: "",
+  });
 
-function UploadClothes({ onUploaded }) {
-  const [form, setForm] = useState(initialForm);
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    return () => {
-      if (preview) URL.revokeObjectURL(preview);
-    };
-  }, [preview]);
-
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-
-    setError("");
-    setSuccess("");
-
-    if (!file) return;
-
-    const allowedTypes = ["image/jpeg", "image/png"];
-
-    if (!allowedTypes.includes(file.type)) {
-      setError("Please select a JPG, JPEG or PNG image.");
-      e.target.value = "";
+    if (!image) {
+      setPreview("");
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Image size must be less than 5 MB.");
-      e.target.value = "";
-      return;
-    }
+    const objectUrl = URL.createObjectURL(image);
+    setPreview(objectUrl);
 
-    setImage(file);
-    setPreview(URL.createObjectURL(file));
-  };
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [image]);
 
   const handleChange = (e) => {
     setForm({
@@ -59,220 +38,203 @@ function UploadClothes({ onUploaded }) {
     });
   };
 
+  const handleImage = (e) => {
+    const file = e.target.files?.[0];
+
+    setError("");
+    setMessage("");
+
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setError("Please select a JPG or PNG image.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image must be smaller than 5 MB.");
+      return;
+    }
+
+    setImage(file);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setError("");
-    setSuccess("");
+    setMessage("");
 
     if (!image) {
-      setError("Please select a clothing image.");
+      setError("Please select a clothing photograph.");
       return;
     }
 
-    if (!form.name || !form.category || !form.color) {
-      setError("Please fill in the required fields.");
-      return;
-    }
-
-    const formData = new FormData();
-
-    formData.append("image", image);
-
-    Object.entries(form).forEach(([key, value]) => {
-      formData.append(key, value);
-    });
+    setLoading(true);
 
     try {
-      setLoading(true);
+      const data = new FormData();
+
+      Object.entries(form).forEach(([key, value]) => {
+        data.append(key, value);
+      });
+
+      data.append("image", image);
 
       const response = await api.post(
         "/clothes/upload",
-        formData
+        data
       );
 
-      setSuccess(response.data.message);
+      setMessage(
+        response.data.message ||
+        "Clothing extracted successfully!"
+      );
 
-      setForm(initialForm);
+      setForm({
+        name: "",
+        category: "",
+        color: "",
+        season: "",
+        occasion: "",
+        description: "",
+      });
+
       setImage(null);
-      setPreview("");
-
-      const fileInput = document.getElementById("clothing-image");
-
-      if (fileInput) fileInput.value = "";
 
       if (onUploaded) {
-        onUploaded(response.data.clothing);
+        setTimeout(() => onUploaded(), 1200);
       }
+
     } catch (err) {
       setError(
         err.response?.data?.message ||
-        "Unable to upload clothing. Please try again."
+        "Unable to process the clothing image."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const inputClass =
-    "w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-violet-500";
-
-  const labelClass =
-    "block text-sm text-slate-300 mb-2";
-
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">
+    <div className="w-full max-w-3xl mx-auto">
+      <div className="mb-7">
+        <h2 className="text-2xl sm:text-3xl font-bold">
           Add Clothing
-        </h1>
+        </h2>
 
-        <p className="text-slate-400 mt-2">
-          Add a new item to your digital wardrobe.
+        <p className="text-gray-400 text-sm mt-2">
+          Upload a photograph. AI will automatically
+          isolate the clothing before saving it.
         </p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6"
+        className="bg-[#151520] border border-[#292939] rounded-2xl p-5 sm:p-7 space-y-5"
       >
         <div>
-          <label className={labelClass}>
-            Clothing Image *
+          <label className="form-label">
+            Clothing photograph
           </label>
 
-          <div className="border-2 border-dashed border-slate-700 rounded-2xl p-6 text-center hover:border-violet-500 transition">
+          <label className="flex flex-col items-center justify-center min-h-52 border-2 border-dashed border-purple-500/40 rounded-xl cursor-pointer hover:bg-purple-500/5 transition p-5 text-center">
             {preview ? (
-              <div className="relative max-w-sm mx-auto">
-                <img
-                  src={preview}
-                  alt="Clothing preview"
-                  className="w-full h-72 object-contain rounded-xl bg-slate-950"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImage(null);
-                    setPreview("");
-                    const input = document.getElementById("clothing-image");
-                    if (input) input.value = "";
-                  }}
-                  className="absolute top-2 right-2 bg-red-600 rounded-full p-2"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+              <img
+                src={preview}
+                alt="Original clothing preview"
+                className="max-h-64 max-w-full object-contain rounded-lg"
+              />
             ) : (
-              <label
-                htmlFor="clothing-image"
-                className="cursor-pointer block py-10"
-              >
+              <>
                 <ImagePlus
-                  size={45}
-                  className="mx-auto text-violet-400 mb-4"
+                  size={42}
+                  className="text-purple-400 mb-3"
                 />
 
-                <p className="font-medium">
-                  Click to upload clothing image
-                </p>
+                <span className="font-semibold">
+                  Choose a photograph
+                </span>
 
-                <p className="text-xs text-slate-500 mt-2">
-                  JPG, JPEG or PNG · Maximum 5 MB
-                </p>
-              </label>
+                <span className="text-xs text-gray-500 mt-2">
+                  JPG or PNG · Maximum 5 MB
+                </span>
+              </>
             )}
 
             <input
-              id="clothing-image"
               type="file"
-              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
-              onChange={handleImageChange}
+              accept="image/jpeg,image/png"
               className="hidden"
+              onChange={handleImage}
             />
-          </div>
-        </div>
-
-        <div>
-          <label className={labelClass}>
-            Clothing Name *
           </label>
 
-          <input
-            type="text"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            placeholder="e.g. White Cotton T-shirt"
-            className={inputClass}
-            required
-          />
+          <p className="text-xs text-gray-500 mt-2">
+            Flat-lay, hanger and worn-clothing photos
+            are supported as input types, but extraction
+            accuracy may vary.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>
-              Category *
+            <label className="form-label">
+              Clothing name
+            </label>
+
+            <input
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              placeholder="e.g. Blue Denim Jacket"
+              required
+              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
+            />
+          </div>
+
+          <div>
+            <label className="form-label">
+              Category
             </label>
 
             <select
               name="category"
               value={form.category}
               onChange={handleChange}
-              className={inputClass}
               required
+              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
             >
               <option value="">Select category</option>
-              <option value="T-Shirts">T-Shirts</option>
+              <option value="Tops">Tops</option>
               <option value="Shirts">Shirts</option>
-              <option value="Pants">Pants</option>
+              <option value="Trousers">Trousers</option>
               <option value="Jeans">Jeans</option>
-              <option value="Shorts">Shorts</option>
+              <option value="Skirts">Skirts</option>
+              <option value="Dresses">Dresses</option>
               <option value="Jackets">Jackets</option>
-              <option value="Hoodies">Hoodies</option>
-              <option value="Sweaters">Sweaters</option>
               <option value="Shoes">Shoes</option>
               <option value="Accessories">Accessories</option>
             </select>
           </div>
 
           <div>
-            <label className={labelClass}>
-              Color *
+            <label className="form-label">
+              Color
             </label>
 
-            <select
+            <input
               name="color"
               value={form.color}
               onChange={handleChange}
-              className={inputClass}
+              placeholder="e.g. Navy Blue"
               required
-            >
-              <option value="">Select color</option>
-              {[
-                "Black",
-                "White",
-                "Blue",
-                "Red",
-                "Green",
-                "Yellow",
-                "Grey",
-                "Brown",
-                "Beige",
-                "Pink",
-                "Purple",
-                "Orange",
-                "Multicolor",
-              ].map((color) => (
-                <option key={color} value={color}>
-                  {color}
-                </option>
-              ))}
-            </select>
+              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
+            />
           </div>
 
           <div>
-            <label className={labelClass}>
+            <label className="form-label">
               Season
             </label>
 
@@ -280,18 +242,18 @@ function UploadClothes({ onUploaded }) {
               name="season"
               value={form.season}
               onChange={handleChange}
-              className={inputClass}
+              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
             >
               <option value="">Select season</option>
               <option value="Summer">Summer</option>
               <option value="Winter">Winter</option>
               <option value="Monsoon">Monsoon</option>
-              <option value="All-season">All-season</option>
+              <option value="All Season">All Season</option>
             </select>
           </div>
 
-          <div>
-            <label className={labelClass}>
+          <div className="sm:col-span-2">
+            <label className="form-label">
               Occasion
             </label>
 
@@ -299,58 +261,64 @@ function UploadClothes({ onUploaded }) {
               name="occasion"
               value={form.occasion}
               onChange={handleChange}
-              className={inputClass}
+              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
             >
               <option value="">Select occasion</option>
               <option value="Casual">Casual</option>
               <option value="Formal">Formal</option>
               <option value="Party">Party</option>
               <option value="Sports">Sports</option>
-              <option value="Office">Office</option>
-              <option value="Travel">Travel</option>
+              <option value="Traditional">Traditional</option>
             </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="form-label">
+              Description
+            </label>
+
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              rows="3"
+              placeholder="Additional clothing details..."
+              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500 resize-y"
+            />
           </div>
         </div>
 
-        <div>
-          <label className={labelClass}>
-            Description
-          </label>
-
-          <textarea
-            name="description"
-            value={form.description}
-            onChange={handleChange}
-            rows="3"
-            placeholder="Additional details about this clothing item..."
-            className={inputClass}
-          />
-        </div>
-
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl p-4 text-sm">
+          <div className="bg-red-500/10 text-red-400 rounded-xl p-3 text-sm">
             {error}
           </div>
         )}
 
-        {success && (
-          <div className="bg-green-500/10 border border-green-500/30 text-green-400 rounded-xl p-4 text-sm flex items-center gap-2">
+        {message && (
+          <div className="bg-green-500/10 text-green-400 rounded-xl p-3 text-sm flex items-center gap-2">
             <CheckCircle size={18} />
-            {success}
+            {message}
           </div>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-xl py-4 font-semibold flex items-center justify-center gap-2"
+          className="primary-button w-full flex justify-center items-center gap-2"
         >
-          <Upload size={19} />
-          {loading ? "Uploading..." : "Save to My Wardrobe"}
+          {loading ? (
+            <>
+              <Loader2 size={19} className="animate-spin" />
+              Extracting clothing with AI...
+            </>
+          ) : (
+            <>
+              <Upload size={19} />
+              Extract and Save Clothing
+            </>
+          )}
         </button>
       </form>
     </div>
   );
 }
-
-export default UploadClothes;
