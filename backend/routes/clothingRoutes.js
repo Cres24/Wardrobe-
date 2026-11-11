@@ -2,24 +2,28 @@
 const express = require("express");
 const router = express.Router();
 
-const authenticate = require("../middleware/authMiddleware");
-const upload = require("../middleware/uploadMiddleware");
-
 const {
   uploadClothing,
   getClothes,
   deleteClothing,
 } = require("../controllers/clothingController");
 
-router.post(
-  "/upload",
-  authenticate,
-  upload.single("image"),
-  uploadClothing
-);
+const authMiddleware = require("../middleware/authMiddleware");
+const uploadMiddleware = require("../middleware/uploadMiddleware");
 
-router.get("/", authenticate, getClothes);
+// All clothing routes require authentication
+router.use(authMiddleware);
 
-router.delete("/:id", authenticate, deleteClothing);
+// Upload a clothing item
+// POST /api/clothes
+router.post("/", uploadMiddleware.single("image"), uploadClothing);
+
+// Get all clothing items belonging to the logged-in user
+// GET /api/clothes
+router.get("/", getClothes);
+
+// Delete a clothing item
+// DELETE /api/clothes/:id
+router.delete("/:id", deleteClothing);
 
 module.exports = router;
