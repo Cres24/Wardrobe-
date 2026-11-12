@@ -1,10 +1,11 @@
 
 import React, { useEffect, useState } from "react";
-import { Upload, ImagePlus, Loader2, CheckCircle } from "lucide-react";
-import api from "../services/api";
 
-export default function UploadClothes({ onUploaded }) {
-  const [form, setForm] = useState({
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+function UploadClothes() {
+  const [formData, setFormData] = useState({
     name: "",
     category: "",
     color: "",
@@ -19,46 +20,59 @@ export default function UploadClothes({ onUploaded }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // Clean up image preview URL when it changes or component unmounts
   useEffect(() => {
-    if (!image) {
-      setPreview("");
-      return;
-    }
+    return () => {
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
 
-    const objectUrl = URL.createObjectURL(image);
-    setPreview(objectUrl);
-
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [image]);
-
+  // Handle text inputs
   const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
   };
 
-  const handleImage = (e) => {
-    const file = e.target.files?.[0];
+  // Handle image selection
+  const handleImageChange = (e) => {
+    const selectedImage = e.target.files?.[0];
 
     setError("");
     setMessage("");
 
-    if (!file) return;
+    if (!selectedImage) {
+      setImage(null);
+      setPreview("");
+      return;
+    }
 
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
+    if (!["image/jpeg", "image/png"].includes(selectedImage.type)) {
       setError("Please select a JPG or PNG image.");
+      e.target.value = "";
+      setImage(null);
+      setPreview("");
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Image must be smaller than 5 MB.");
+    if (selectedImage.size > 10 * 1024 * 1024) {
+      setError("Image size must be less than 10 MB.");
+      e.target.value = "";
+      setImage(null);
+      setPreview("");
       return;
     }
 
-    setImage(file);
+    setImage(selectedImage);
+    setPreview(URL.createObjectURL(selectedImage));
   };
 
+  // Upload clothing to backend
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -66,32 +80,63 @@ export default function UploadClothes({ onUploaded }) {
     setMessage("");
 
     if (!image) {
-      setError("Please select a clothing photograph.");
+      setError("Please select a clothing image.");
       return;
     }
 
-    setLoading(true);
+    if (
+      !formData.name.trim() ||
+      !formData.category ||
+      !formData.color.trim()
+    ) {
+      setError("Please enter the clothing name, category, and color.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      setError("You are not logged in. Please log in again.");
+      return;
+    }
+
+    // Create multipart form data
+    const uploadData = new FormData();
+
+    uploadData.append("image", image);
+    uploadData.append("name", formData.name.trim());
+    uploadData.append("category", formData.category);
+    uploadData.append("color", formData.color.trim());
+    uploadData.append("season", formData.season);
+    uploadData.append("occasion", formData.occasion);
+    uploadData.append("description", formData.description.trim());
 
     try {
-      const data = new FormData();
+      setLoading(true);
 
-      Object.entries(form).forEach(([key, value]) => {
-        data.append(key, value);
+      // IMPORTANT: Correct endpoint is /clothes, NOT /clothes/upload
+      const response = await fetch(`${API_URL}/clothes`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: uploadData,
       });
 
-      data.append("image", image);
+      const result = await response.json();
 
-      const response = await api.post(
-        "/clothes/upload",
-        data
-      );
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to upload clothing."
+        );
+      }
 
       setMessage(
-        response.data.message ||
-        "Clothing extracted successfully!"
+        result.message || "Clothing uploaded successfully!"
       );
 
-      setForm({
+      // Reset form after successful upload
+      setFormData({
         name: "",
         category: "",
         color: "",
@@ -101,224 +146,231 @@ export default function UploadClothes({ onUploaded }) {
       });
 
       setImage(null);
+      setPreview("");
 
-      if (onUploaded) {
-        setTimeout(() => onUploaded(), 1200);
+      const fileInput = document.getElementById("clothing-image");
+
+      if (fileInput) {
+        fileInput.value = "";
       }
-
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-        "Unable to process the clothing image."
-      );
+      console.error("Clothing upload error:", err);
+      setError(err.message || "Something went wrong during upload.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto">
-      <div className="mb-7">
-        <h2 className="text-2xl sm:text-3xl font-bold">
-          Add Clothing
-        </h2>
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-3xl">
 
-        <p className="text-gray-400 text-sm mt-2">
-          Upload a photograph. AI will automatically
-          isolate the clothing before saving it.
-        </p>
-      </div>
+        {/* Heading */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">
+            Add Clothing
+          </h1>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-[#151520] border border-[#292939] rounded-2xl p-5 sm:p-7 space-y-5"
-      >
-        <div>
-          <label className="form-label">
-            Clothing photograph
-          </label>
-
-          <label className="flex flex-col items-center justify-center min-h-52 border-2 border-dashed border-purple-500/40 rounded-xl cursor-pointer hover:bg-purple-500/5 transition p-5 text-center">
-            {preview ? (
-              <img
-                src={preview}
-                alt="Original clothing preview"
-                className="max-h-64 max-w-full object-contain rounded-lg"
-              />
-            ) : (
-              <>
-                <ImagePlus
-                  size={42}
-                  className="text-purple-400 mb-3"
-                />
-
-                <span className="font-semibold">
-                  Choose a photograph
-                </span>
-
-                <span className="text-xs text-gray-500 mt-2">
-                  JPG or PNG · Maximum 5 MB
-                </span>
-              </>
-            )}
-
-            <input
-              type="file"
-              accept="image/jpeg,image/png"
-              className="hidden"
-              onChange={handleImage}
-            />
-          </label>
-
-          <p className="text-xs text-gray-500 mt-2">
-            Flat-lay, hanger and worn-clothing photos
-            are supported as input types, but extraction
-            accuracy may vary.
+          <p className="mt-2 text-gray-500">
+            Upload a clothing item to your personal wardrobe.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6 rounded-2xl bg-white p-5 shadow-sm sm:p-8"
+        >
+
+          {/* Image upload */}
           <div>
-            <label className="form-label">
-              Clothing name
+            <label className="mb-3 block font-semibold text-gray-700">
+              Clothing Image
+            </label>
+
+            <div className="rounded-xl border-2 border-dashed border-gray-300 p-5 text-center">
+
+              {preview ? (
+                <div className="mb-4">
+                  <img
+                    src={preview}
+                    alt="Clothing preview"
+                    className="mx-auto max-h-72 rounded-lg object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="py-8">
+                  <div className="mb-3 text-4xl">📷</div>
+
+                  <p className="font-medium text-gray-700">
+                    Choose a clothing image
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-400">
+                    JPG or PNG, maximum 10 MB
+                  </p>
+                </div>
+              )}
+
+              <input
+                id="clothing-image"
+                type="file"
+                accept="image/jpeg,image/png"
+                onChange={handleImageChange}
+                className="mx-auto mt-3 block w-full max-w-xs text-sm text-gray-600"
+              />
+            </div>
+          </div>
+
+          {/* Clothing name */}
+          <div>
+            <label className="mb-2 block font-medium text-gray-700">
+              Clothing Name *
             </label>
 
             <input
+              type="text"
               name="name"
-              value={form.name}
+              value={formData.name}
               onChange={handleChange}
               placeholder="e.g. Blue Denim Jacket"
               required
-              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
             />
           </div>
 
+          {/* Category */}
           <div>
-            <label className="form-label">
-              Category
+            <label className="mb-2 block font-medium text-gray-700">
+              Category *
             </label>
 
             <select
               name="category"
-              value={form.category}
+              value={formData.category}
               onChange={handleChange}
               required
-              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
             >
               <option value="">Select category</option>
               <option value="Tops">Tops</option>
               <option value="Shirts">Shirts</option>
-              <option value="Trousers">Trousers</option>
+              <option value="T-Shirts">T-Shirts</option>
+              <option value="Pants">Pants</option>
               <option value="Jeans">Jeans</option>
+              <option value="Shorts">Shorts</option>
               <option value="Skirts">Skirts</option>
               <option value="Dresses">Dresses</option>
               <option value="Jackets">Jackets</option>
+              <option value="Coats">Coats</option>
               <option value="Shoes">Shoes</option>
               <option value="Accessories">Accessories</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
+          {/* Color */}
           <div>
-            <label className="form-label">
-              Color
+            <label className="mb-2 block font-medium text-gray-700">
+              Color *
             </label>
 
             <input
+              type="text"
               name="color"
-              value={form.color}
+              value={formData.color}
               onChange={handleChange}
               placeholder="e.g. Navy Blue"
               required
-              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
             />
           </div>
 
+          {/* Season */}
           <div>
-            <label className="form-label">
+            <label className="mb-2 block font-medium text-gray-700">
               Season
             </label>
 
             <select
               name="season"
-              value={form.season}
+              value={formData.season}
               onChange={handleChange}
-              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
             >
               <option value="">Select season</option>
               <option value="Summer">Summer</option>
               <option value="Winter">Winter</option>
-              <option value="Monsoon">Monsoon</option>
-              <option value="All Season">All Season</option>
+              <option value="Spring">Spring</option>
+              <option value="Autumn">Autumn</option>
+              <option value="All Seasons">All Seasons</option>
             </select>
           </div>
 
-          <div className="sm:col-span-2">
-            <label className="form-label">
+          {/* Occasion */}
+          <div>
+            <label className="mb-2 block font-medium text-gray-700">
               Occasion
             </label>
 
             <select
               name="occasion"
-              value={form.occasion}
+              value={formData.occasion}
               onChange={handleChange}
-              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
             >
               <option value="">Select occasion</option>
               <option value="Casual">Casual</option>
               <option value="Formal">Formal</option>
               <option value="Party">Party</option>
               <option value="Sports">Sports</option>
+              <option value="Work">Work</option>
               <option value="Traditional">Traditional</option>
             </select>
           </div>
 
-          <div className="sm:col-span-2">
-            <label className="form-label">
+          {/* Description */}
+          <div>
+            <label className="mb-2 block font-medium text-gray-700">
               Description
             </label>
 
             <textarea
               name="description"
-              value={form.description}
+              value={formData.description}
               onChange={handleChange}
-              rows="3"
-              placeholder="Additional clothing details..."
-              className="w-full bg-[#0c0c14] border border-[#303041] rounded-xl p-3 text-white outline-none focus:border-purple-500 resize-y"
+              placeholder="Additional details about this clothing item..."
+              rows="4"
+              className="w-full resize-y rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
             />
           </div>
-        </div>
 
-        {error && (
-          <div className="bg-red-500/10 text-red-400 rounded-xl p-3 text-sm">
-            {error}
-          </div>
-        )}
-
-        {message && (
-          <div className="bg-green-500/10 text-green-400 rounded-xl p-3 text-sm flex items-center gap-2">
-            <CheckCircle size={18} />
-            {message}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="primary-button w-full flex justify-center items-center gap-2"
-        >
-          {loading ? (
-            <>
-              <Loader2 size={19} className="animate-spin" />
-              Extracting clothing with AI...
-            </>
-          ) : (
-            <>
-              <Upload size={19} />
-              Extract and Save Clothing
-            </>
+          {/* Success message */}
+          {message && (
+            <div className="rounded-lg bg-green-100 p-4 text-sm text-green-700">
+              {message}
+            </div>
           )}
-        </button>
-      </form>
+
+          {/* Error message */}
+          {error && (
+            <div className="rounded-lg bg-red-100 p-4 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Uploading Clothing..." : "Upload to Wardrobe"}
+          </button>
+
+        </form>
+      </div>
     </div>
   );
 }
+
+export default UploadClothes;
