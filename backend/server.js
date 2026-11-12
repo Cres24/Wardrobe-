@@ -5,17 +5,15 @@ const express = require("express");
 const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
 
-// Import route files
 const authRoutes = require("./routes/authRoutes");
 const clothingRoutes = require("./routes/clothingRoutes");
 
 const app = express();
 const prisma = new PrismaClient();
 
-// ===============================
-// MIDDLEWARE
-// ===============================
+const PORT = process.env.PORT || 5000;
 
+// 1. CORS configuration
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
@@ -23,43 +21,55 @@ app.use(
   })
 );
 
+// 2. Parse incoming request data
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ===============================
-// HEALTH CHECK
-// ===============================
+// 3. Request logger (helps debug API routes)
+app.use((req, res, next) => {
+  console.log("REQUEST:", req.method, req.originalUrl);
+  next();
+});
 
+// 4. Root route
 app.get("/", (req, res) => {
-  res.status(200).json({
+  res.json({
     success: true,
-    message: "Smart Wardrobe API is running!",
+    message: "Smart Wardrobe API is running",
   });
 });
 
-// API health check
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "API is working correctly",
-  });
+// 5. Health check
+app.get("/api/health", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+
+    res.status(200).json({
+      success: true,
+      message: "Server and database are connected",
+      database: "Connected",
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Database connection failed",
+      database: "Disconnected",
+    });
+  }
 });
 
-// ===============================
-// API ROUTES
-// ===============================
-
-// Authentication routes
+// 6. Authentication routes
 app.use("/api/auth", authRoutes);
 
-// Clothing routes
+// 7. Clothing routes
 app.use("/api/clothes", clothingRoutes);
 
-// ===============================
-// 404 - ROUTE NOT FOUND
-// ===============================
-
+// 8. Handle unknown API routes
 app.use((req, res) => {
+  console.log("ROUTE NOT FOUND:", req.method, req.originalUrl);
+
   res.status(404).json({
     success: false,
     message: "API route not found",
@@ -68,12 +78,9 @@ app.use((req, res) => {
   });
 });
 
-// ===============================
-// GLOBAL ERROR HANDLER
-// ===============================
-
+// 9. Global error handler
 app.use((err, req, res, next) => {
-  console.error("Server Error:", err);
+  console.error("SERVER ERROR:", err);
 
   res.status(err.status || 500).json({
     success: false,
@@ -81,44 +88,32 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ===============================
-// START SERVER
-// ===============================
-
-const PORT = process.env.PORT || 5000;
-
+// 10. Start server
 async function startServer() {
   try {
     await prisma.$connect();
 
-    console.log("PostgreSQL connected successfully!");
+    console.log("Database connected successfully");
 
-    const server = app.listen(PORT, () => {
-      console.log(`Smart Wardrobe server running on port ${PORT}`);
-      console.log(`Local URL: http://localhost:${PORT}`);
-      console.log(`Health URL: http://localhost:${PORT}/api/health`);
+    app.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}`);
     });
-
-    // Graceful shutdown
-    async function shutdown() {
-      console.log("Shutting down server...");
-
-      server.close(async () => {
-        await prisma.$disconnect();
-        console.log("Database disconnected.");
-        process.exit(0);
-      });
-    }
-
-    process.on("SIGINT", shutdown);
-    process.on("SIGTERM", shutdown);
-
   } catch (error) {
-    console.error("Unable to start server:", error);
-
+    console.error("Failed to start server:", error);
     await prisma.$disconnect();
     process.exit(1);
   }
 }
 
 startServer();
+
+// 11. Graceful shutdown
+process.on("SIGINT", async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
