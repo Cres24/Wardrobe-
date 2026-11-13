@@ -1,28 +1,19 @@
 
 const { PrismaClient } = require("@prisma/client");
 const cloudinary = require("../config/cloudinary");
-const {
-  extractClothing,
-} = require("../services/clothingSegmentation");
+const { extractClothing } = require("../services/clothingSegmentation");
 
 const prisma = new PrismaClient();
 
-/**
- * Upload processed clothing image to Cloudinary.
- * Only the extracted transparent PNG is uploaded.
- */
-function uploadToCloudinary(buffer) {
+// Upload processed clothing image to Cloudinary
+const uploadToCloudinary = (buffer) => {
   return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
+    const stream = cloudinary.uploader.upload_stream(
       {
         folder: "smart-wardrobe/clothing",
         resource_type: "image",
         format: "png",
-        transformation: [
-          {
-            quality: "auto",
-          },
-        ],
+        quality: "auto",
       },
       (error, result) => {
         if (error) {
@@ -33,37 +24,43 @@ function uploadToCloudinary(buffer) {
       }
     );
 
-    uploadStream.end(buffer);
+    stream.end(buffer);
   });
-}
+};
 
-/**
- * UPLOAD CLOTHING
- * 1. Receive original photograph.
- * 2. Extract clothing using AI.
- * 3. Remove background.
- * 4. Upload transparent PNG to Cloudinary.
- * 5. Save clothing details in PostgreSQL.
- */
+// CREATE: Upload clothing item
 const uploadClothing = async (req, res) => {
   let uploadedImage = null;
 
   try {
-    // Check authentication.
-    if (!req.user || !req.user.id) {
+    console.log("UPLOAD CONTROLLER REACHED");
+    console.log("Authenticated user:", req.user);
+
+    // Verify authenticated user
+    if (!req.user || !req.user.userId) {
       return res.status(401).json({
+        success: false,
         message: "Authentication required.",
       });
     }
 
-    // Check uploaded image.
-    if (!req.file) {
-      return res.status(400).json({
-        message: "Please select a clothing photograph.",
+    const userId = Number(req.user.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid authenticated user.",
       });
     }
 
-    // Get clothing information.
+    // Verify uploaded file
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select a clothing image.",
+      });
+    }
+
     const {
       name,
       category,
@@ -73,144 +70,85 @@ const uploadClothing = async (req, res) => {
       description,
     } = req.body;
 
-    // Validate required fields.
-    if (
-      !name?.trim() ||
-      !category?.trim() ||
-      !color?.trim()
-    ) {
+    if (!name || !category || !color) {
       return res.status(400).json({
-        message: "Name, category and color are required.",
+        success: false,
+        message: "Name, category, and color are required.",
       });
     }
 
-    // Validate image type.
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-    ];
+    // Process image using clothing segmentation
+    console.log("Starting clothing segmentation...");
 
-    if (!allowedTypes.includes(req.file.mimetype)) {
-      return res.status(400).json({
-        message: "Only JPG and PNG images are supported.",
-      });
+    const processedImage = await extractClothing(req.file.buffer);
+
+    if (!processedImage || !Buffer.isBuffer(processedImage)) {
+      throw new Error("Clothing segmentation did not return a valid image.");
     }
 
-    console.log("Starting AI clothing extraction...");
+    console.log("Clothing segmentation completed.");
 
-    // STEP 1: Extract clothing using AI.
-    const processedBuffer = await extractClothing(
-      req.file.buffer
-    );
+    // Upload processed image to Cloudinary
+    uploadedImage = await uploadToCloudinary(processedImage);
 
-    if (
-      !Buffer.isBuffer(processedBuffer) ||
-      processedBuffer.length === 0
-    ) {
-      throw new Error(
-        "AI failed to generate the extracted clothing image."
-      );
-    }
+    console.log("Image uploaded to Cloudinary.");
 
-    console.log("AI clothing extraction completed.");
-
-    // STEP 2: Upload processed transparent PNG.
-    console.log("Uploading extracted clothing to Cloudinary...");
-
-    uploadedImage = await uploadToCloudinary(
-      processedBuffer
-    );
-
-    if (!uploadedImage || !uploadedImage.secure_url) {
-      throw new Error(
-        "Cloudinary did not return a valid image URL."
-      );
-    }
-
-    console.log("Cloudinary upload successful.");
-
-    // STEP 3: Save clothing information in PostgreSQL.
+    // Save clothing details in PostgreSQL
     const clothing = await prisma.clothingItem.create({
       data: {
-        name: name.trim(),
-        category: category.trim(),
-        color: color.trim(),
-
-        season: season?.trim() || null,
-        occasion: occasion?.trim() || null,
-        description: description?.trim() || null,
-
+        name,
+        category,
+        color,
+        season: season || null,
+        occasion: occasion || null,
+        description: description || null,
         imageUrl: uploadedImage.secure_url,
         imagePublicId: uploadedImage.public_id,
-
-        userId: req.user.id,
+        userId: userId,
       },
     });
 
-    console.log("Clothing saved successfully.");
-
-    // STEP 4: Return successful response.
     return res.status(201).json({
       success: true,
-      message: "Clothing extracted and saved successfully!",
+      message: "Clothing item uploaded successfully.",
       clothing,
     });
 
   } catch (error) {
-    console.error(
-      "Clothing upload error:",
-      error.message
-    );
+    console.error("UPLOAD CLOTHING ERROR:", error);
 
-    // If Cloudinary upload succeeded but database
-    // saving failed, remove the uploaded image.
-    if (uploadedImage?.public_id) {
+    // Remove Cloudinary image if database saving failed
+    if (uploadedImage && uploadedImage.public_id) {
       try {
-        await cloudinary.uploader.destroy(
-          uploadedImage.public_id,
-          {
-            resource_type: "image",
-          }
-        );
-
-        console.log(
-          "Temporary Cloudinary image deleted."
-        );
-
+        await cloudinary.uploader.destroy(uploadedImage.public_id);
       } catch (cleanupError) {
-        console.error(
-          "Cloudinary cleanup error:",
-          cleanupError.message
-        );
+        console.error("Cloudinary cleanup error:", cleanupError);
       }
     }
 
     return res.status(500).json({
       success: false,
-      message:
-        error.message ||
-        "Failed to extract and save clothing.",
+      message: error.message || "Failed to upload clothing item.",
     });
   }
 };
 
-/**
- * GET ALL CLOTHING
- * Returns clothing belonging to the logged-in user.
- */
+// READ: Get all clothing items belonging to logged-in user
 const getClothes = async (req, res) => {
   try {
-    if (!req.user || !req.user.id) {
+    if (!req.user || !req.user.userId) {
       return res.status(401).json({
+        success: false,
         message: "Authentication required.",
       });
     }
 
+    const userId = Number(req.user.userId);
+
     const clothes = await prisma.clothingItem.findMany({
       where: {
-        userId: req.user.id,
+        userId: userId,
       },
-
       orderBy: {
         createdAt: "desc",
       },
@@ -223,95 +161,77 @@ const getClothes = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(
-      "Get clothes error:",
-      error.message
-    );
+    console.error("GET CLOTHES ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Unable to retrieve your wardrobe.",
+      message: "Failed to retrieve clothing items.",
     });
   }
 };
 
-/**
- * DELETE CLOTHING
- * Deletes the image from Cloudinary and the record
- * from PostgreSQL.
- */
+// DELETE: Delete a clothing item
 const deleteClothing = async (req, res) => {
   try {
-    if (!req.user || !req.user.id) {
+    if (!req.user || !req.user.userId) {
       return res.status(401).json({
+        success: false,
         message: "Authentication required.",
       });
     }
 
-    const { id } = req.params;
+    const userId = Number(req.user.userId);
+    const clothingId = Number(req.params.id);
 
-    // Find item belonging to logged-in user.
+    if (!Number.isInteger(clothingId) || clothingId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid clothing item ID.",
+      });
+    }
+
+    // Only find items belonging to the logged-in user
     const clothing = await prisma.clothingItem.findFirst({
       where: {
-        id,
-        userId: req.user.id,
+        id: clothingId,
+        userId: userId,
       },
     });
 
     if (!clothing) {
       return res.status(404).json({
+        success: false,
         message: "Clothing item not found.",
       });
     }
 
-    // Delete the database record first so a Cloudinary
-    // failure does not leave the item in the wardrobe.
-    await prisma.clothingItem.delete({
-      where: {
-        id: clothing.id,
-      },
-    });
-
-    // Delete image from Cloudinary.
+    // Delete image from Cloudinary
     if (clothing.imagePublicId) {
       try {
-        const result = await cloudinary.uploader.destroy(
-          clothing.imagePublicId,
-          {
-            resource_type: "image",
-          }
-        );
-
-        if (result.result !== "ok" &&
-            result.result !== "not found") {
-          console.error(
-            "Cloudinary deletion was not confirmed:",
-            result
-          );
-        }
-
+        await cloudinary.uploader.destroy(clothing.imagePublicId);
       } catch (cloudinaryError) {
-        console.error(
-          "Cloudinary image deletion failed:",
-          cloudinaryError.message
-        );
+        console.error("Cloudinary deletion error:", cloudinaryError);
       }
     }
 
+    // Delete database record
+    await prisma.clothingItem.delete({
+      where: {
+        id: clothingId,
+      },
+    });
+
     return res.status(200).json({
       success: true,
-      message: "Clothing deleted successfully.",
+      message: "Clothing item deleted successfully.",
     });
 
   } catch (error) {
-    console.error(
-      "Delete clothing error:",
-      error.message
-    );
+    console.error("DELETE CLOTHING ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Unable to delete clothing.",
+      message: "Failed to delete clothing item.",
     });
   }
 };

@@ -2,12 +2,16 @@
 const jwt = require("jsonwebtoken");
 
 const authMiddleware = (req, res, next) => {
+  console.log("\n--- AUTHENTICATION CHECK ---");
+  console.log("URL:", req.originalUrl);
+  console.log("Method:", req.method);
+  console.log("Authorization header exists:", !!req.headers.authorization);
+
   try {
-    // 1. Check whether Authorization header exists
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-      console.log("AUTH ERROR: Authorization header missing");
+      console.log("RESULT: Authorization header missing");
 
       return res.status(401).json({
         success: false,
@@ -15,9 +19,8 @@ const authMiddleware = (req, res, next) => {
       });
     }
 
-    // 2. Check Bearer token format
     if (!authHeader.startsWith("Bearer ")) {
-      console.log("AUTH ERROR: Invalid authorization format");
+      console.log("RESULT: Invalid Bearer format");
 
       return res.status(401).json({
         success: false,
@@ -25,11 +28,10 @@ const authMiddleware = (req, res, next) => {
       });
     }
 
-    // 3. Extract token
     const token = authHeader.split(" ")[1];
 
     if (!token) {
-      console.log("AUTH ERROR: Token missing");
+      console.log("RESULT: Empty token");
 
       return res.status(401).json({
         success: false,
@@ -37,9 +39,8 @@ const authMiddleware = (req, res, next) => {
       });
     }
 
-    // 4. Verify JWT
     if (!process.env.JWT_SECRET) {
-      console.error("AUTH ERROR: JWT_SECRET is not configured");
+      console.log("RESULT: JWT_SECRET missing");
 
       return res.status(500).json({
         success: false,
@@ -49,18 +50,17 @@ const authMiddleware = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 5. Attach authenticated user to request
     req.user = {
       userId: decoded.userId,
     };
 
-    console.log("AUTH SUCCESS: User ID:", req.user.userId);
+    console.log("RESULT: AUTH SUCCESS");
+    console.log("USER ID:", req.user.userId);
 
-    // 6. Continue to requested route
     next();
-
   } catch (error) {
-    console.error("AUTH ERROR:", error.message);
+    console.log("RESULT: AUTHENTICATION FAILED");
+    console.log("ERROR:", error.message);
 
     return res.status(401).json({
       success: false,
