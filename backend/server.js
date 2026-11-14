@@ -105,8 +105,6 @@ async function startServer() {
   }
 }
 
-startServer();
-
 // 11. Graceful shutdown
 process.on("SIGINT", async () => {
   await prisma.$disconnect();
@@ -117,3 +115,11 @@ process.on("SIGTERM", async () => {
   await prisma.$disconnect();
   process.exit(0);
 });
+
+// 12. Export the Express app for serverless platforms (Vercel).
+// Only start a standalone listener when this file is run directly.
+module.exports = app;
+
+if (require.main === module) {
+  startServer();
+}
